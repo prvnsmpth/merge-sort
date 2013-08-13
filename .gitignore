@@ -1,0 +1,5 @@
+*.o
+*.bin
+sort
+show
+*.txt
