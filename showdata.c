@@ -13,7 +13,7 @@ int main(int argc, char **argv){
     if (argc > 2)
         sscanf(argv[2], "%d", &numrecords);
     else
-        numrecords = 1000;
+        numrecords = 120000;
 	//Location of bin file
 	ptr_myfile=fopen(inputfile,"rb");
 	if (!ptr_myfile)
@@ -25,14 +25,14 @@ int main(int argc, char **argv){
 	unsigned int noofattr;
 	int type,length;
 	fread(&noofattr,sizeof(unsigned int),1,ptr_myfile);
-	printf("No of attributes: %d",noofattr);
-	printf("\n\n----------Metadata---------------\n\n");
+	// printf("No of attributes: %d",noofattr);
+	// printf("\n\n----------Metadata---------------\n\n");
 	for(count=0;count<noofattr;count++){
 		fread(&type,sizeof(int),1,ptr_myfile);
 		fread(&length,sizeof(int),1,ptr_myfile);
 		attributes[count][0]=type;
 		attributes[count][1]=length;
-		printf("Attribute %d\ntype: %d length: %d\n\n",count+1,type,length);
+		// printf("Attribute %d\ntype: %d length: %d\n\n",count+1,type,length);
 	}
 	
 	int returnval=1;

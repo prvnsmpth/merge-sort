@@ -192,6 +192,7 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
         run_bp[i] = heap_data[i] = buffer_start_addr;
         run_pointers[i] = run_bp[i] + m.record_size;
         run_ep[i] = run_bp[i] + bytes_per_run;
+        printf("Block %d: %p to %p\n", i + 1, run_bp[i], run_ep[i]);
     }
 
     // the output buffer
@@ -214,7 +215,7 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
     while (1)
     {
         // get min record from heap, and compute the index of the parent run
-        void *min_rec = heap_pop(HEAP);
+        void *min_rec = heap_pop(HEAP); 
         if (!min_rec)
         {
             // write out whatever is left in the output buffer and exit
@@ -228,42 +229,38 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
             }
             break;
         }
-        int min_rec_run = get_run_number(min_rec, run_bp, merge_at_once);   
-        printf("%d\n", min_rec_run);
+        int min_rec_run = get_run_number(min_rec, run_bp, merge_at_once);
+
+        // copy the min record popped from the heap into the output run        
+        memcpy(run_pointers[merge_at_once], min_rec, m.record_size);        
+        run_pointers[merge_at_once] += m.record_size;                 
 
         // fetch a new record from the run and push into heap,
         // adjusting the run pointer
         if (run_pointers[min_rec_run - 1] < run_ep[min_rec_run - 1])
         {
-            heap_push(HEAP, run_pointers[min_rec_run - 1]);
+            heap_push(HEAP, run_pointers[min_rec_run - 1]);            
             push++;
             run_pointers[min_rec_run - 1] += m.record_size;
         }
-
-        // check for underflow of run chunk,
-        // load new chunk from corresponding run file if detected
-        if (run_pointers[min_rec_run - 1] >= run_ep[min_rec_run - 1])
-        {
+        else if (run_pointers[min_rec_run - 1] >= run_ep[min_rec_run - 1])
+        {                    
             size_t check = fread(run_bp[min_rec_run - 1],
                 num_records_in_block * m.record_size, blocks_per_run, runs[min_rec_run - 1]);
             read_from_runs += check * num_records_in_block;
-            
+
             // reset the run pointer
             if (check > 0)
-            {
+            {                 
                 run_pointers[min_rec_run - 1] = run_bp[min_rec_run - 1];
-                run_ep[min_rec_run - 1] = run_bp[min_rec_run - 1] + check * num_records_in_block * m.record_size;
+                run_ep[min_rec_run - 1] = run_bp[min_rec_run - 1] + check * num_records_in_block * m.record_size;               
 
                 // push first record from fresh lot into heap
-                heap_push(HEAP, run_pointers[min_rec_run - 1]);
+                heap_push(HEAP, run_pointers[min_rec_run - 1]);                
                 push++;
                 run_pointers[min_rec_run - 1] += m.record_size;
             }
-        }
-
-        // copy the min record popped from the heap into the output run
-        memcpy(run_pointers[merge_at_once], min_rec, m.record_size);
-        run_pointers[merge_at_once] += m.record_size;        
+        }      
 
         // check for overflow of the output run,
         // write to output run if an overflow is detected
@@ -274,6 +271,7 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
                 num_records_in_block * m.record_size, blocks_per_run, output_run);
             fclose(output_run);
             num_recs_read += check * num_records_in_block;
+            
             // reset the run pointer
             run_pointers[merge_at_once] = run_bp[merge_at_once];
         }
@@ -311,6 +309,20 @@ int main(int argc, char **argv)
 {
 	int attributes[1] = {1};
     sort(argv[1], argv[0], 1, attributes, 1000000);
+
+    // test heap
+    // int a[5] = {1, 2, 3, 4, 0};
+    // heap *h = (heap *) malloc(sizeof(heap));
+    // heap_init(h, compare_int);
+    // int i = 0;
+    // for (; i < 5; i++)
+    //     heap_push(h, &a[i]);
+    // int got = *(int *) heap_pop(h);
+    // printf("Min: %d\n", got);
+    // heap_push(h, &a[2]);
+    // printf("Min: %d\n", *(int *) heap_pop(h));
+    // heap_push(h, &a[4]);
+    // printf("Min: %d\n", *(int *) heap_pop(h));
 
     return 0;
 }
