@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #define heap_front(h) ((h)->data[0])
+#define heap_destroy(h) (free(h))
 #define DEFAULT_SIZE 16
 
 typedef int (*comparison_fn_t) (const void *, const void *);

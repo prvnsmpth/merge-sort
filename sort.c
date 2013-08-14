@@ -158,135 +158,179 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
     printf("Read %d records from input file. Wrote %d records\n", num_recs_read, num_recs_wrote);
 
     // number of generated runs
-    int num_runs = i;
+    int init_num_runs = i;
 
     /********************************* MERGE ********************************/
+
+    // number of runs in a pass
+    int num_runs = init_num_runs;
 
     // max no. of runs we can merge at once
     int max_merge_runs = (bufsize / DISK_BLOCK_SIZE) - 1;
 
-    // decide how many runs to merge at once
-    int merge_at_once = (num_runs < max_merge_runs ? num_runs : max_merge_runs);
+    int start = 1;
+    int interm_runp = 1;
+    char temp_run_name[20];
+    int runs_left_this_pass = num_runs;
 
-    // how much to read from one run file
-    int blocks_per_run = (bufsize / (merge_at_once + 1)) / DISK_BLOCK_SIZE;
-    int bytes_per_run = blocks_per_run * num_records_in_block * m.record_size;
-
-    // print out the parameters
-    printf("%d runs generated. %d runs can be merged at once.\n", num_runs, max_merge_runs);
-    printf("%d blocks (%d bytes) to be read from each run file.\n", blocks_per_run, bytes_per_run);
-
-    // read from runs into buffer
-    FILE **runs = (FILE **) malloc(merge_at_once * sizeof(FILE *));
-    char **run_pointers = (char **) malloc((merge_at_once + 1) * sizeof(char *));
-    char **run_bp = (char **) malloc((merge_at_once + 1) * sizeof(char *));
-    char **run_ep = (char **) malloc((merge_at_once + 1) * sizeof(char *));
-    char **heap_data = (char **) malloc(merge_at_once * sizeof(char *));
-    for (i = 0; i < merge_at_once; i++)
-    {    	
-    	sprintf(run_name, "run_%d.bin", i + 1);
-    	runs[i] = fopen(run_name, "r");
-        fseek(runs[i], m.header_size, SEEK_SET);
-        char *buffer_start_addr = buffer + i * bytes_per_run;
-    	fread(buffer_start_addr, num_records_in_block * m.record_size, blocks_per_run, runs[i]);        
-        run_bp[i] = heap_data[i] = buffer_start_addr;
-        run_pointers[i] = run_bp[i] + m.record_size;
-        run_ep[i] = run_bp[i] + bytes_per_run;
-        printf("Block %d: %p to %p\n", i + 1, run_bp[i], run_ep[i]);
-    }
-
-    // the output buffer
-    run_bp[i] = run_pointers[i] = buffer + i * bytes_per_run;
-
-    // create the heap
-    heap *HEAP = (heap *) malloc(sizeof(heap));
-    heap_init(HEAP, compare_records);
-    heapify((void **)heap_data, merge_at_once, compare_records);
-    heap_set_data(HEAP, (void **)heap_data, merge_at_once, merge_at_once);
-    
-    // open a temporary run file for storing merged contents of all the generated runs
-    FILE *temp_out = fopen("run_temp.bin", "w");
-    write_metadata(temp_out, m);
-    fclose(temp_out); 
-
-    num_recs_read = 0;
-    int push = 0;
-    int read_from_runs = 0;
+    // run multiple passes over the runs to merge into one file
     while (1)
     {
-        // get min record from heap, and compute the index of the parent run
-        void *min_rec = heap_pop(HEAP); 
-        if (!min_rec)
+        // check if we have to move to the next pass
+        if (runs_left_this_pass == 0)
         {
-            // write out whatever is left in the output buffer and exit
-            if (run_pointers[merge_at_once] > run_bp[merge_at_once])
+            start = 1;
+            interm_runp = 1;
+            int merged_at_once = (num_runs < max_merge_runs ? num_runs : max_merge_runs);
+            if (num_runs == merged_at_once)
+                break;
+            num_runs = (num_runs / merged_at_once) + 1;            
+            runs_left_this_pass = num_runs; 
+        }        
+
+        // decide how many runs to merge at once
+        int merge_at_once = (runs_left_this_pass < max_merge_runs ? runs_left_this_pass : max_merge_runs);       
+        sprintf(temp_run_name, "run_temp.bin");  
+
+        // how much to read from one run file
+        int blocks_per_run = (bufsize / (merge_at_once + 1)) / DISK_BLOCK_SIZE;
+        int bytes_per_run = blocks_per_run * num_records_in_block * m.record_size;
+
+        // print out the parameters
+        printf("%d runs generated. %d runs can be merged at once.\n", num_runs, max_merge_runs);
+        printf("%d blocks (%d bytes) to be read from each run file.\n", blocks_per_run, bytes_per_run);
+
+        // read from runs into buffer
+        FILE **runs = (FILE **) malloc(merge_at_once * sizeof(FILE *));
+        char **run_pointers = (char **) malloc((merge_at_once + 1) * sizeof(char *));
+        char **run_bp = (char **) malloc((merge_at_once + 1) * sizeof(char *));
+        char **run_ep = (char **) malloc((merge_at_once + 1) * sizeof(char *));
+        char **heap_data = (char **) malloc(merge_at_once * sizeof(char *));
+        for (i = 0; i < merge_at_once; i++)
+        {    	
+        	sprintf(run_name, "run_%d.bin", i + start);
+        	runs[i] = fopen(run_name, "r");
+            fseek(runs[i], m.header_size, SEEK_SET);
+            char *buffer_start_addr = buffer + i * bytes_per_run;
+        	fread(buffer_start_addr, num_records_in_block * m.record_size, blocks_per_run, runs[i]);        
+            run_bp[i] = heap_data[i] = buffer_start_addr;
+            run_pointers[i] = run_bp[i] + m.record_size;
+            run_ep[i] = run_bp[i] + bytes_per_run;
+        }
+
+        // the output buffer
+        run_bp[i] = run_pointers[i] = buffer + i * bytes_per_run;
+
+        // create the heap
+        heap *HEAP = (heap *) malloc(sizeof(heap));
+        heap_init(HEAP, compare_records);
+        heapify((void **)heap_data, merge_at_once, compare_records);
+        heap_set_data(HEAP, (void **)heap_data, merge_at_once, merge_at_once);
+        
+        // open a temporary run file for storing merged contents of all the generated runs
+        FILE *temp_out = fopen(temp_run_name, "w");
+        write_metadata(temp_out, m);
+        fclose(temp_out); 
+
+        // read chunks of data from each run file into a heap
+        // and write to a temp run file until all the run files become empty
+        num_recs_read = 0;
+        int push = 0;
+        int read_from_runs = 0;
+        while (1)
+        {
+            // get min record from heap, and compute the index of the parent run
+            void *min_rec = heap_pop(HEAP); 
+            if (!min_rec)
             {
-                FILE *output_run = fopen("run_temp.bin", "a");
-                size_t check = fwrite(run_bp[merge_at_once], 
-                    1, run_pointers[merge_at_once] - run_bp[merge_at_once], output_run);
-                fclose(output_run);
-                printf("Emptying output buffer, writing %d bytes\n", check);
+                // write out whatever is left in the output buffer and exit
+                if (run_pointers[merge_at_once] > run_bp[merge_at_once])
+                {
+                    FILE *output_run = fopen(temp_run_name, "a");
+                    size_t check = fwrite(run_bp[merge_at_once], 
+                        1, run_pointers[merge_at_once] - run_bp[merge_at_once], output_run);
+                    fclose(output_run);
+                    // printf("Emptying output buffer, writing %d bytes\n", check);
+                }
+                break;
             }
-            break;
-        }
-        int min_rec_run = get_run_number(min_rec, run_bp, merge_at_once);
+            int min_rec_run = get_run_number(min_rec, run_bp, merge_at_once);
 
-        // copy the min record popped from the heap into the output run        
-        memcpy(run_pointers[merge_at_once], min_rec, m.record_size);        
-        run_pointers[merge_at_once] += m.record_size;                 
+            // copy the min record popped from the heap into the output run        
+            memcpy(run_pointers[merge_at_once], min_rec, m.record_size);        
+            run_pointers[merge_at_once] += m.record_size;                 
 
-        // fetch a new record from the run and push into heap,
-        // adjusting the run pointer
-        if (run_pointers[min_rec_run - 1] < run_ep[min_rec_run - 1])
-        {
-            heap_push(HEAP, run_pointers[min_rec_run - 1]);            
-            push++;
-            run_pointers[min_rec_run - 1] += m.record_size;
-        }
-        else if (run_pointers[min_rec_run - 1] >= run_ep[min_rec_run - 1])
-        {                    
-            size_t check = fread(run_bp[min_rec_run - 1],
-                num_records_in_block * m.record_size, blocks_per_run, runs[min_rec_run - 1]);
-            read_from_runs += check * num_records_in_block;
-
-            // reset the run pointer
-            if (check > 0)
-            {                 
-                run_pointers[min_rec_run - 1] = run_bp[min_rec_run - 1];
-                run_ep[min_rec_run - 1] = run_bp[min_rec_run - 1] + check * num_records_in_block * m.record_size;               
-
-                // push first record from fresh lot into heap
-                heap_push(HEAP, run_pointers[min_rec_run - 1]);                
+            // fetch a new record from the run and push into heap,
+            // adjusting the run pointer
+            if (run_pointers[min_rec_run - 1] < run_ep[min_rec_run - 1])
+            {
+                heap_push(HEAP, run_pointers[min_rec_run - 1]);            
                 push++;
                 run_pointers[min_rec_run - 1] += m.record_size;
             }
-        }      
+            else if (run_pointers[min_rec_run - 1] >= run_ep[min_rec_run - 1])
+            {                    
+                size_t check = fread(run_bp[min_rec_run - 1],
+                    num_records_in_block * m.record_size, blocks_per_run, runs[min_rec_run - 1]);
+                read_from_runs += check * num_records_in_block;
 
-        // check for overflow of the output run,
-        // write to output run if an overflow is detected
-        if (run_pointers[merge_at_once] >= run_bp[merge_at_once] + bytes_per_run)
-        {
-            FILE *output_run = fopen("run_temp.bin", "a");
-            size_t check = fwrite(run_bp[merge_at_once], 
-                num_records_in_block * m.record_size, blocks_per_run, output_run);
-            fclose(output_run);
-            num_recs_read += check * num_records_in_block;
-            
-            // reset the run pointer
-            run_pointers[merge_at_once] = run_bp[merge_at_once];
+                // reset the run pointer
+                if (check > 0)
+                {                 
+                    run_pointers[min_rec_run - 1] = run_bp[min_rec_run - 1];
+                    run_ep[min_rec_run - 1] = run_bp[min_rec_run - 1] + check * num_records_in_block * m.record_size;               
+
+                    // push first record from fresh lot into heap
+                    heap_push(HEAP, run_pointers[min_rec_run - 1]);                
+                    push++;
+                    run_pointers[min_rec_run - 1] += m.record_size;
+                }
+            }      
+
+            // check for overflow of the output run,
+            // write to output run if an overflow is detected
+            if (run_pointers[merge_at_once] >= run_bp[merge_at_once] + bytes_per_run)
+            {
+                FILE *output_run = fopen(temp_run_name, "a");
+                size_t check = fwrite(run_bp[merge_at_once], 
+                    num_records_in_block * m.record_size, blocks_per_run, output_run);
+                fclose(output_run);
+                num_recs_read += check * num_records_in_block;
+                
+                // reset the run pointer
+                run_pointers[merge_at_once] = run_bp[merge_at_once];
+            }
         }
-    }
-    printf("Wrote %d records to temp run file. %d pushed. %d read from runs\n", num_recs_read, push, read_from_runs);
+        // printf("Wrote %d records to temp run file. %d pushed. %d read from runs\n", num_recs_read, push, read_from_runs);         
 
-    // clean up  
-    free(HEAP);  
-    free(HEAP->data);
-    free(run_ep);
-    free(run_bp);
-    free(run_pointers);
-    for (i = 0; i < merge_at_once; i++)
-        fclose(runs[i]);
-    free(runs);
+        // clean up  
+        free(HEAP);  
+        free(HEAP->data);
+        free(run_ep);
+        free(run_bp);
+        free(run_pointers);
+        for (i = 0; i < merge_at_once; i++)
+            fclose(runs[i]);
+        free(runs);
+
+        // delete run files used to build this run file
+        for (i = 0; i < merge_at_once; i++)
+        {
+            sprintf(run_name, "run_%d.bin", i + start);
+            remove(run_name);
+        }
+
+        // compute number of runs left in this pass        
+        runs_left_this_pass -= merge_at_once;   
+        start += merge_at_once;
+
+        // rename temp file to run_<index>.bin
+        sprintf(run_name, "run_%d.bin", interm_runp);
+        interm_runp++;        
+        rename(temp_run_name, run_name);
+        printf("Merged %d - %d into %s\n", start - merge_at_once, start - 1, run_name);
+
+    }
 
     /************************* END MERGE *************************************/
 
@@ -308,7 +352,7 @@ int compare_int(const void *a, const void *b)
 int main(int argc, char **argv)
 {
 	int attributes[1] = {1};
-    sort(argv[1], argv[0], 1, attributes, 1000000);
+    sort(argv[1], argv[2], 1, attributes, 100000);
 
     // test heap
     // int a[5] = {1, 2, 3, 4, 0};
