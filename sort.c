@@ -122,7 +122,7 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
     int num_records_in_block = DISK_BLOCK_SIZE / m.record_size;
     int num_blocks_in_buffer = bufsize / DISK_BLOCK_SIZE;
     printf("Records in block: %d\n", num_records_in_block);
-    printf("Blocks in buffer: %d \n", num_records_in_buffer);
+    printf("Blocks in buffer: %d \n", num_blocks_in_buffer);
     
     // the buffer
     char *buffer = (char *) malloc(bufsize);
@@ -130,7 +130,7 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
     // create the initial set of runs
     size_t blocks_read;
     i = 0;
-    char run_name[10];
+    char run_name[20];
     FILE *out;
     unsigned int num_recs_read = 0;
     unsigned int num_recs_wrote = 0;
@@ -183,9 +183,16 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
             interm_runp = 1;
             int merged_at_once = (num_runs < max_merge_runs ? num_runs : max_merge_runs);
             if (num_runs == merged_at_once)
+            {
+                // final output of merging all runs is in run_1.bin
+                // rename it to 'outputfile'
+                rename("run_1.bin", outputfile);
+
                 break;
-            num_runs = (num_runs / merged_at_once) + 1;            
+            }
+            num_runs = (num_runs / merged_at_once) + 1 * (num_runs % merged_at_once != 0);            
             runs_left_this_pass = num_runs; 
+            printf("==========================================================================\n");
         }        
 
         // decide how many runs to merge at once
@@ -205,7 +212,8 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
         char **run_pointers = (char **) malloc((merge_at_once + 1) * sizeof(char *));
         char **run_bp = (char **) malloc((merge_at_once + 1) * sizeof(char *));
         char **run_ep = (char **) malloc((merge_at_once + 1) * sizeof(char *));
-        char **heap_data = (char **) malloc(merge_at_once * sizeof(char *));
+        heap *HEAP = (heap *) malloc(sizeof(heap));
+        heap_init(HEAP, compare_records);
         for (i = 0; i < merge_at_once; i++)
         {    	
         	sprintf(run_name, "run_%d.bin", i + start);
@@ -213,19 +221,14 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
             fseek(runs[i], m.header_size, SEEK_SET);
             char *buffer_start_addr = buffer + i * bytes_per_run;
         	fread(buffer_start_addr, num_records_in_block * m.record_size, blocks_per_run, runs[i]);        
-            run_bp[i] = heap_data[i] = buffer_start_addr;
+            run_bp[i] = buffer_start_addr;
+            heap_push(HEAP, run_bp[i]);
             run_pointers[i] = run_bp[i] + m.record_size;
             run_ep[i] = run_bp[i] + bytes_per_run;
         }
 
         // the output buffer
         run_bp[i] = run_pointers[i] = buffer + i * bytes_per_run;
-
-        // create the heap
-        heap *HEAP = (heap *) malloc(sizeof(heap));
-        heap_init(HEAP, compare_records);
-        heapify((void **)heap_data, merge_at_once, compare_records);
-        heap_set_data(HEAP, (void **)heap_data, merge_at_once, merge_at_once);
         
         // open a temporary run file for storing merged contents of all the generated runs
         FILE *temp_out = fopen(temp_run_name, "w");
@@ -303,9 +306,9 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
         }
         // printf("Wrote %d records to temp run file. %d pushed. %d read from runs\n", num_recs_read, push, read_from_runs);         
 
-        // clean up  
-        free(HEAP);  
-        free(HEAP->data);
+        // clean up
+        heap_destroy(HEAP);
+        free(HEAP);       
         free(run_ep);
         free(run_bp);
         free(run_pointers);
@@ -351,8 +354,14 @@ int compare_int(const void *a, const void *b)
 
 int main(int argc, char **argv)
 {
-	int attributes[1] = {1};
-    sort(argv[1], argv[2], 1, attributes, 100000);
+	int attributes[3] = {8, -4, 1};
+
+    if (argc < 3) {
+        printf("Usage: ./sort [input file] [output file]\n");
+        exit (EXIT_FAILURE);
+    }
+
+    sort(argv[1], argv[2], 3, attributes, 1000000);
 
     // test heap
     // int a[5] = {1, 2, 3, 4, 0};

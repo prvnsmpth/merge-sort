@@ -97,3 +97,8 @@ void heap_set_data(heap *h, void **arr, unsigned int count, unsigned int size)
 	h->count = count;
 	h->size = size;
 }
+
+void heap_destroy(heap *h)
+{
+	free(h->data);
+}
