@@ -13,7 +13,7 @@ int main(int argc, char **argv){
     if (argc > 2)
         sscanf(argv[2], "%d", &numrecords);
     else
-        numrecords = 120000;
+        numrecords = 140000;
 	//Location of bin file
 	ptr_myfile=fopen(inputfile,"rb");
 	if (!ptr_myfile)
@@ -41,15 +41,15 @@ int main(int argc, char **argv){
 		for(count=0;count<noofattr;count++){
 			switch (attributes[count][0]){
 			case 1: returnval=fread(&num1,attributes[count][1],1,ptr_myfile);
-                    if (returnval == 0) break;
+                    if (returnval == 0) return;
 					printf("%d ",num1);
 					break;
 			case 2: returnval=fread(&num2,attributes[count][1],1,ptr_myfile);
-                    if (returnval == 0) break;
+                    if (returnval == 0) return;
 					printf("%f ",num2);
 					break;
 			case 3: returnval=fread(data2,attributes[count][1],1,ptr_myfile);
-                    if (returnval == 0) break;
+                    if (returnval == 0) return;
 					printf("%s ",data2);
 					break;
 			}
