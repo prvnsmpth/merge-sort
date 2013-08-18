@@ -1,0 +1,36 @@
+CS 631 - Assignment 1						
+=====================
+
+Praveen Sampath
+Roll No. 100050004
+
+The sort method is present in the file sort.c.
+This method depends on other auxiliary methods defined in sort.c and a 
+heap implementation in heap.h and heap.c.
+
+
+Compilation
+-----------
+
+$ make sort
+
+Usage
+-----
+
+Usage: ./sort [-o output_file] [-b buffer_size] [-a attr_list] input_file
+
+The only required argument is the input file name.
+
+Options:
+	
+	-o output_file
+		Specify output file name. If not specified, the sorted data is written to 'output.bin'.
+
+	-b buffer_size
+		Set the buffer size (in bytes). The default buffer size is 100000 bytes.
+
+	-a attr_list
+		Specify the attributes to be considered for sorting, separated by comma.
+		E.g., -a 3,4 or -a 8,4,-3.
+		There should be NO SPACE between attribute index and the comma.
+		If no attribute list is supplied, the data is sorted on the first column.

@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "heap.h"
 
 #define DISK_BLOCK_SIZE 4096
+#define DEFAULT_BUFFER 100000
 
 typedef struct {
     int type;
@@ -155,10 +157,11 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
         num_recs_written += records_written;
         fclose(out);
     }
-    printf("Read %d records from input file. Wrote %d records\n", num_recs_read, num_recs_written);
+    printf("Read %d records from input file.\n", num_recs_read);
 
     // number of generated runs
     int init_num_runs = i;
+    printf("Number of initial runs generated: %d\nMerging...\n", i);
 
     /********************************* MERGE ********************************/
 
@@ -187,12 +190,13 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
                 // the final merged output of all runs is in run_1.bin
                 // rename it to 'outputfile'
                 rename("run_1.bin", outputfile);
+                printf("Done.\nOutput written to: %s\n", outputfile);
 
                 break;
             }
             num_runs = (num_runs / merged_at_once) + 1 * (num_runs % merged_at_once != 0);            
             runs_left_this_pass = num_runs; 
-            printf("==========================================================================\n");
+            // printf("==========================================================================\n");
         }        
 
         // decide how many runs to merge at once
@@ -205,8 +209,8 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
         int bytes_per_run = blocks_per_run * num_records_in_block * m.record_size;
 
         // print out the parameters
-        printf("%d runs generated. %d runs can be merged at once.\n", num_runs, max_merge_runs);
-        printf("%d blocks (%d bytes) to be read from each run file.\n", blocks_per_run, bytes_per_run);
+        // printf("%d runs generated. %d runs can be merged at once.\n", num_runs, max_merge_runs);
+        // printf("%d blocks (%d bytes) to be read from each run file.\n", blocks_per_run, bytes_per_run);
 
         // read from runs into buffer
         FILE **runs = (FILE **) malloc(merge_at_once * sizeof(FILE *));
@@ -305,7 +309,6 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
                 run_pointers[merge_at_once] = run_bp[merge_at_once];
             }
         }
-        // printf("Wrote %d records to temp run file. %d pushed. %d read from runs\n", num_recs_read, push, read_from_runs);         
 
         // clean up
         heap_destroy(HEAP);
@@ -332,7 +335,7 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
         sprintf(run_name, "run_%d.bin", interm_runp);
         interm_runp++;        
         rename(temp_run_name, run_name);
-        printf("Merged %d - %d into %s\n", start - merge_at_once, start - 1, run_name);
+        // printf("Merged %d - %d into %s\n", start - merge_at_once, start - 1, run_name);
 
     }
 
@@ -346,23 +349,76 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
     fclose(in);
 }
 
-int compare_int(const void *a, const void *b)
+void print_usage()
 {
-    int c = *(int *) a;
-    int d = *(int *) b;
-    return (c > d) - (c < d);
+    printf("Usage: ./sort [-o output_file] [-b buffer_size] \n\
+            [-a attr_list] input_file\n");
 }
 
 int main(int argc, char **argv)
 {
-	int attributes[3] = {3, -4, 1};
+    int num_comp_attrs = 0;
+	int *attributes;
+    int buffer_size = 0;
+    char *outputfile = NULL, *token;
+    char *delim = ",";
+    int c, len, i;
+    while ((c = getopt(argc, argv, "b:o:a:h")) != -1)
+    {
+        switch (c)
+        {
+            case 'b' :
+                sscanf(optarg, "%d", &buffer_size);
+                break;
+            case 'o' :
+                outputfile = optarg;
+                break;
+            case 'a' :
+                len = strlen(optarg);
+                for (i = 0; i < len; i++)
+                    if (optarg[i] == ',')
+                        num_comp_attrs++;
+                num_comp_attrs++;
+                attributes = (int *) malloc(sizeof(int) * num_comp_attrs);
+                token = strtok(optarg, delim);
+                sscanf(token, "%d", &attributes[0]);            
+                for (i = 1; token = strtok(NULL, delim); i++)
+                {
+                    sscanf(token, "%d", &attributes[i]);
+                }
+                break;
+            case 'h':
+                // print usage and exit
+                print_usage();
+                exit(0);
+            case '?':
+                break;
+            default:
+                abort();             
+        }        
+    }
 
-    if (argc < 3) {
-        printf("Usage: ./sort [input file] [output file]\n");
+    if (optind >= argc)
+    {
+        print_usage();
         exit (EXIT_FAILURE);
     }
 
-    sort(argv[1], argv[2], 3, attributes, DISK_BLOCK_SIZE * 8);
+    if (buffer_size == 0)
+        buffer_size = DEFAULT_BUFFER;
+    if (num_comp_attrs == 0)
+    {
+        num_comp_attrs = 1;
+        attributes = (int *) malloc(sizeof(int));
+        attributes[0] = 1;
+    }
+    if (outputfile == NULL)
+    {
+        outputfile = "output.bin";
+    }
 
+    sort(argv[optind], outputfile, num_comp_attrs, attributes, buffer_size);
+
+    free(attributes);
     return 0;
 }
