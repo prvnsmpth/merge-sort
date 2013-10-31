@@ -34,3 +34,21 @@ Options:
 		E.g., -a 3,4 or -a 8,4,-3.
 		There should be NO SPACE between attribute index and the comma.
 		If no attribute list is supplied, the data is sorted on the first column.
+
+Data file format
+----------------
+
+The input data file (the file to be sorted) is a binary file that is structured as follows:
+
+Metadata
+
+4 byte unsigned int:  number of attributes  (n) 
+followed by metadata of n attributes, each of the form 
+    type (4 bytes), length (4 bytes) 
+    Type is one of the following:  1: int, 2: double, 3: char (fixed length) 
+
+Data
+
+Records are fixed length.
+
+Refer to the sort function in sort.c to see how the metadata and data are read from the input binary file

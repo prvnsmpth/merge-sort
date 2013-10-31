@@ -196,7 +196,6 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
             }
             num_runs = (num_runs / merged_at_once) + 1 * (num_runs % merged_at_once != 0);            
             runs_left_this_pass = num_runs; 
-            // printf("==========================================================================\n");
         }        
 
         // decide how many runs to merge at once
@@ -207,10 +206,6 @@ void sort(char *inputfile, char *outputfile, int numattrs, int attributes[], int
         int blocks_per_run = (bufsize / (merge_at_once + 1)) / DISK_BLOCK_SIZE;
         int records_per_run = blocks_per_run * num_records_in_block;
         int bytes_per_run = blocks_per_run * num_records_in_block * m.record_size;
-
-        // print out the parameters
-        // printf("%d runs generated. %d runs can be merged at once.\n", num_runs, max_merge_runs);
-        // printf("%d blocks (%d bytes) to be read from each run file.\n", blocks_per_run, bytes_per_run);
 
         // read from runs into buffer
         FILE **runs = (FILE **) malloc(merge_at_once * sizeof(FILE *));
