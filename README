@@ -1,10 +1,10 @@
-CS 631 - Assignment 1						
-=====================
+MERGE SORT IMPLEMENTATION
+=========================
 
 Praveen Sampath
-Roll No. 100050004
+prvn.exe@gmail.com
 
-The sort method is present in the file sort.c.
+The main sort method is present in the file sort.c.
 This method depends on other auxiliary methods defined in sort.c and a 
 heap implementation in heap.h and heap.c.
 
